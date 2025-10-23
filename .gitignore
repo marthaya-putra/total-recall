@@ -1,0 +1,112 @@
+# .NET Core
+bin/
+obj/
+**/[Rr]eleases/
+**/[Dd]ebug/
+**/[Dd]ebugPublic/
+**/[Rr]eleases/**/*.xml
+**/[Dd]ebug/**/*.xml
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+
+# Visual Studio
+.vs/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# Rider
+.idea/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Azure / Cloud
+**/appsettings.*.json
+!**/appsettings.json
+
+# Node.js (for Web folder)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+build/
+out/
+*.tgz
+*.tar.gz
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# temporary folders
+tmp/
+temp/
+
+# AI/LLM
+.claude
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+
+# User-specific files
+*.local
