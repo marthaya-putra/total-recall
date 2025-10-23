@@ -1,0 +1,26 @@
+{
+  "name": "total-recall-fullstack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "concurrently \"npm run build:api\" \"npm run build:frontend\"",
+    "build:api": "dotnet build Api/Api.csproj --configuration Release",
+    "build:frontend": "cd Frontend && npm run build",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+    "dev:api": "dotnet run --project Api/Api.csproj",
+    "dev:frontend": "cd Frontend && npm run dev",
+    "test": "concurrently \"npm run test:backend\" \"npm run test:frontend\"",
+    "test:backend": "dotnet test",
+    "test:frontend": "cd Frontend && npm test",
+    "install:frontend": "cd Frontend && npm install",
+    "clean": "dotnet clean && cd Frontend && rm -rf node_modules dist",
+    "lint": "cd Frontend && npm run lint",
+    "format": "cd Frontend && npm run format"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "workspaces": [
+    "Frontend"
+  ]
+}

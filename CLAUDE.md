@@ -4,23 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Common Development Commands
 
-### Building and Running
-- **Build the project**: `dotnet build`
-- **Run the application**: `dotnet run`
+### Full-Stack Development (Recommended)
+- **Install dependencies**: `npm run install:frontend` (install npm dependencies for frontend)
+- **Run full stack**: `npm run dev` (starts both API and frontend concurrently)
+- **Build full stack**: `npm run build` (builds both API and frontend)
+- **Run all tests**: `npm run test` (runs both backend and frontend tests)
+
+### Backend (.NET) Development
+- **Build the backend**: `dotnet build`
+- **Run the API**: `dotnet run --project Api/Api.csproj`
 - **Run in debug mode**: `dotnet run --configuration Debug`
 - **Build for release**: `dotnet build --configuration Release`
+- **Run backend tests**: `dotnet test`
 
-### Testing
-- **Run tests**: `dotnet test` (if test projects are added)
-- **Run specific test**: `dotnet test --filter "TestMethodName"`
+### Frontend (React) Development
+- **Navigate to frontend**: `cd Frontend`
+- **Install dependencies**: `npm install`
+- **Run frontend dev server**: `npm run dev`
+- **Build frontend**: `npm run build`
+- **Run frontend tests**: `npm test`
+- **Lint code**: `npm run lint`
+- **Format code**: `npm run format`
 
 ## Architecture Overview
 
-This is a .NET 9.0 console application that implements a RAG (Retrieval-Augmented Generation) system using Azure AI services. The application demonstrates semantic search over documents using vector embeddings.
+This is a full-stack application implementing a RAG (Retrieval-Augmented Generation) system using Azure AI services. The application consists of a .NET 9.0 backend API and a React frontend, demonstrating semantic search over documents using vector embeddings.
 
-### Core Components
+### Backend Components (.NET)
 
-- **Program.cs**: Main entry point containing the RAG pipeline logic
+- **Core/**: Shared business logic and models
+- **Api/**: REST API project for frontend communication
+- **Indexer/**: Document processing and vector indexing service
+- **Program.cs** (in projects): Main entry points containing RAG pipeline logic
   - Environment variable validation and configuration loading
   - Azure OpenAI integration for embeddings and chat completions
   - Azure AI Search for vector indexing and retrieval
@@ -30,6 +45,15 @@ This is a .NET 9.0 console application that implements a RAG (Retrieval-Augmente
   - Recursively finds files in specified paths
   - Supports excluding certain directories (node_modules, dist, etc.)
   - Handles file system access permissions
+
+### Frontend Components (React)
+
+- **Frontend/**: React application built with modern tooling
+  - **TanStack Router**: File-based routing system
+  - **TanStack Query**: Data fetching and caching
+  - **Tailwind CSS**: Utility-first CSS framework
+  - **TypeScript**: Type-safe JavaScript development
+  - **Vite**: Fast development and build tool
 
 ### Key Services and Dependencies
 
