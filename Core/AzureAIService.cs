@@ -1,6 +1,8 @@
 using System.Text;
 using Azure;
 using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Chat;
 using TotalRecall.Core;
 
 namespace TotalRecall.Core
@@ -28,38 +30,41 @@ namespace TotalRecall.Core
         public async Task<float[]> GenerateDocumentEmbeddingAsync(Document document)
         {
             Console.WriteLine($"Generating embedding for document: {document.Id}");
-            var embeddingClient = new OpenAIClient(new Uri(_embeddingEndpoint), new AzureKeyCredential(_embeddingKey));
-            var embeddingOptions = new EmbeddingsOptions(_embeddingDeployment, [document.Content]);
-            var embeddingResponse = await embeddingClient.GetEmbeddingsAsync(embeddingOptions);
+            var client = new AzureOpenAIClient(new Uri(_embeddingEndpoint), new AzureKeyCredential(_embeddingKey));
+            var embeddingClient = client.GetEmbeddingClient(_embeddingDeployment);
+            var embeddingResponse = await embeddingClient.GenerateEmbeddingAsync(document.Content);
             Console.WriteLine($"Embedding generated for document: {document.Id}");
-            return embeddingResponse.Value.Data[0].Embedding.ToArray();
+            return embeddingResponse.Value.ToFloats().ToArray();
         }
 
         public async Task<float[]> GenerateQueryEmbeddingAsync(string query)
         {
             Console.WriteLine($"Generating embedding for query: {query}");
-            var embeddingClient = new OpenAIClient(new Uri(_embeddingEndpoint), new AzureKeyCredential(_embeddingKey));
-            var embeddingOptions = new EmbeddingsOptions(_embeddingDeployment, [query]);
-            var embeddingResponse = await embeddingClient.GetEmbeddingsAsync(embeddingOptions);
+            var client = new AzureOpenAIClient(new Uri(_embeddingEndpoint), new AzureKeyCredential(_embeddingKey));
+            var embeddingClient = client.GetEmbeddingClient(_embeddingDeployment);
+            var embeddingResponse = await embeddingClient.GenerateEmbeddingAsync(query);
             Console.WriteLine($"Query embedding generated for: {query}");
-            return embeddingResponse.Value.Data[0].Embedding.ToArray();
+            return embeddingResponse.Value.ToFloats().ToArray();
         }
 
-        public async Task<string> GenerateCompletionAsync(List<(string path, string content)> contexts, string question)
+        public async IAsyncEnumerable<StreamingChatCompletionUpdate> GenerateCompletionStreamingAsync(List<(string path, string content)> contexts, string question)
         {
             var systemPrompt = BuildDynamicSystemPrompt(contexts, question);
-            var messages = new List<ChatRequestMessage>
+
+            Console.WriteLine($"Generating streaming completion using deployment: {_completionDeployment}");
+            var client = new AzureOpenAIClient(new Uri(_openAIEndpoint), new AzureKeyCredential(_openAIKey));
+            var chatClient = client.GetChatClient(_completionDeployment);
+
+            var messages = new List<ChatMessage>
             {
-                new ChatRequestSystemMessage(systemPrompt),
-                new ChatRequestUserMessage($"Question: {question}")
+                new SystemChatMessage(systemPrompt),
+                new UserChatMessage($"Question: {question}")
             };
 
-            var completionOptions = new ChatCompletionsOptions(_completionDeployment, messages);
-            Console.WriteLine($"Generating completion using deployment: {_completionDeployment}");
-            var openAIClient = new OpenAIClient(new Uri(_openAIEndpoint), new AzureKeyCredential(_openAIKey));
-            var completionResponse = await openAIClient.GetChatCompletionsAsync(completionOptions);
-            Console.WriteLine("Completion generated successfully");
-            return completionResponse.Value.Choices[0].Message.Content;
+            await foreach (var update in chatClient.CompleteChatStreamingAsync(messages))
+            {
+                yield return update;
+            }
         }
 
         private static string BuildDynamicSystemPrompt(List<(string path, string content)> contexts, string question)
@@ -82,7 +87,7 @@ namespace TotalRecall.Core
                 promptBuilder.AppendLine("- Say \"I found your previous implementation that solves this\" when relevant code exists");
                 promptBuilder.AppendLine("- Show the user's own code examples first and explain how they can be reused or adapted");
                 promptBuilder.AppendLine("- Reference which file/context contains the solution");
-                promptBuilder.AppendLine("- IMPORTANT: When presenting code, include the file path in clickable format like `path/to/file.ext` so the user can navigate directly to the file");
+                promptBuilder.AppendLine("- IMPORTANT: When presenting code, include the actual file path from the context. Only show file paths that are provided in the context above.");
                 promptBuilder.AppendLine("- Suggest how to adapt or modify their previous solution for the current needs");
                 promptBuilder.AppendLine();
 
@@ -114,7 +119,7 @@ namespace TotalRecall.Core
             promptBuilder.AppendLine("- Focus on reusing and adapting their existing code rather than writing new solutions");
             promptBuilder.AppendLine("- If no exact match is found, suggest the closest similar implementations");
             promptBuilder.AppendLine("- Format their code examples properly with syntax highlighting");
-            promptBuilder.AppendLine("- CRITICAL: Always include clickable file paths before code blocks using backticks: `path/to/file.ext`");
+            promptBuilder.AppendLine("- CRITICAL: Only include file paths that are provided in the context above. If no file path is available, omit it entirely.");
             promptBuilder.AppendLine("- If no relevant code exists, acknowledge that and suggest they might need to implement something new");
             promptBuilder.AppendLine();
 
@@ -126,7 +131,7 @@ namespace TotalRecall.Core
             promptBuilder.AppendLine("- Explain WHY the modern approach is better (performance, security, maintainability)");
             promptBuilder.AppendLine("- Mention current library versions and when major updates occurred");
             promptBuilder.AppendLine("- If the solution is still current and valid, explicitly state that");
-            promptBuilder.AppendLine("- ALWAYS include clickable file paths when referencing any found code: `path/to/file.ext`");
+            promptBuilder.AppendLine("- ONLY include file paths that are explicitly provided in the context above. Never invent or generate placeholder file paths.");
 
             promptBuilder.AppendLine();
             promptBuilder.AppendLine("Remember: Your goal is to save the user time by helping them rediscover, reuse, and modernize their own excellent work!");
