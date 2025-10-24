@@ -70,43 +70,10 @@ namespace TotalRecall.Core
                 return;
             }
 
-            int batchSize = 500;
-            int concurrency = 8;
-
-            foreach (var batch in documents.Chunk(batchSize))
-            {
-                Console.WriteLine($"Processing batch with {batch.Length} documents...");
-
-                var semaphore = new SemaphoreSlim(concurrency);
-                var readTasks = batch.Select(async document =>
-                {
-                    await semaphore.WaitAsync();
-                    try
-                    {
-                        var doc = new Document
-                        {
-                            Id = SanitizeFileName(document.Path),
-                            Path = document.Path,
-                            Content = document.Content,
-                        };
-                        doc.ContentVector = document.ContentVector;
-                        return doc;
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                });
-
-                var processedDocuments = await Task.WhenAll(readTasks);
-
-                Console.WriteLine($"Calling IndexDocumentsAsync API for batch of {processedDocuments.Length} documents...");
-                var searchClient = new SearchClient(new Uri(_searchServiceEndpoint), _indexName, new AzureKeyCredential(_searchServiceKey));
-                await searchClient.IndexDocumentsAsync(IndexDocumentsBatch.Upload(processedDocuments));
-                Console.WriteLine($"Indexed batch of {processedDocuments.Length} documents successfully.");
-            }
-
-            Console.WriteLine("All document batches completed!");
+            Console.WriteLine($"Calling IndexDocumentsAsync API for batch of {documents.Count} documents...");
+            var searchClient = new SearchClient(new Uri(_searchServiceEndpoint), _indexName, new AzureKeyCredential(_searchServiceKey));
+            await searchClient.IndexDocumentsAsync(IndexDocumentsBatch.Upload(documents));
+            Console.WriteLine($"Indexed batch of {documents.Count} documents successfully.");
         }
 
         public async Task<List<(string path, string content)>> SearchAsync(string query, float[] queryVector, int topK = 3)

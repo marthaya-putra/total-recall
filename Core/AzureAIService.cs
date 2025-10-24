@@ -70,71 +70,47 @@ namespace TotalRecall.Core
         private static string BuildDynamicSystemPrompt(List<(string path, string content)> contexts, string question)
         {
             var promptBuilder = new StringBuilder();
+            var currentDateTime = DateTime.Now;
 
-            // Base role definition - focused on finding user's previous implementations
-            promptBuilder.AppendLine("You are the user's personal code library assistant. Your primary role is to help the user find and reuse their own previous implementations and solutions from their codebase.");
-            promptBuilder.AppendLine("The user knows they have solved similar problems before and wants to locate their existing solutions rather than reinventing the wheel.");
+            promptBuilder.AppendLine($"Current Date and Time: {currentDateTime:yyyy-MM-dd HH:mm:ss} (UTC)");
+            promptBuilder.AppendLine($"Treat {currentDateTime:MMMM yyyy} as the current date for all time references.");
             promptBuilder.AppendLine();
 
-            // Add context-specific instructions
+            promptBuilder.AppendLine("You are the user's personal code library assistant.");
+            promptBuilder.AppendLine("Your role: find, explain, and modernize the user's previous code implementations. If none are found, provide a new, well-structured implementation.");
+            promptBuilder.AppendLine();
+
             if (contexts.Any())
             {
-                promptBuilder.AppendLine("Code Search Results:");
-                promptBuilder.AppendLine("I found these potentially relevant implementations from your codebase. These are YOUR previous code solutions:");
-                promptBuilder.AppendLine();
-                promptBuilder.AppendLine("Instructions:");
-                promptBuilder.AppendLine("- PRIORITIZE showing the user's exact previous implementations that solve their current problem");
-                promptBuilder.AppendLine("- Say \"I found your previous implementation that solves this\" when relevant code exists");
-                promptBuilder.AppendLine("- Show the user's own code examples first and explain how they can be reused or adapted");
-                promptBuilder.AppendLine("- Reference which file/context contains the solution");
-                promptBuilder.AppendLine("- IMPORTANT: When presenting code, include the actual file path from the context. Only show file paths that are provided in the context above.");
-                promptBuilder.AppendLine("- Suggest how to adapt or modify their previous solution for the current needs");
-                promptBuilder.AppendLine();
-
-                // Add context information with more emphasis on ownership
-                promptBuilder.AppendLine("Your Previous Code Implementations Found:");
+                promptBuilder.AppendLine("User’s Previous Implementations Found:");
                 for (int i = 0; i < contexts.Count; i++)
                 {
                     var (path, content) = contexts[i];
-                    // Truncate very long contexts to avoid token limits
-                    if (content.Length > 2000)
-                    {
-                        content = content.Substring(0, 2000) + "...";
-                    }
-                    promptBuilder.AppendLine($"Your Implementation {i + 1} (from {path}):");
+                    if (content.Length > 2000) content = content[..2000] + "...";
+                    promptBuilder.AppendLine($"Implementation {i + 1} (from {path}):");
                     promptBuilder.AppendLine(content);
                     promptBuilder.AppendLine();
                 }
+
+                promptBuilder.AppendLine("Instructions:");
+                promptBuilder.AppendLine("- Begin with: \"I found your previous implementation that solves this.\"");
+                promptBuilder.AppendLine("- Show how it works, referencing the actual file path.");
+                promptBuilder.AppendLine("- Explain how to reuse or adapt it for the current problem.");
+                promptBuilder.AppendLine("- If outdated, suggest specific modern alternatives and explain why they’re better.");
+                promptBuilder.AppendLine("- If still valid, confirm that explicitly (e.g., 'Your implementation remains valid for October 2025.').");
             }
             else
             {
-                promptBuilder.AppendLine("No existing implementations found in your codebase for this problem.");
-                promptBuilder.AppendLine("Since I couldn't find your previous solutions, you may need to implement this from scratch or the code might not be indexed yet.");
-                promptBuilder.AppendLine();
+                promptBuilder.AppendLine("No previous implementations found in the codebase.");
+                promptBuilder.AppendLine("Provide a complete new implementation that meets the user’s request, using current best practices and libraries.");
             }
-
-            // Add question-type specific instructions
-            promptBuilder.AppendLine("Response Guidelines:");
-            promptBuilder.AppendLine("- Always remind the user that these are THEIR previous implementations");
-            promptBuilder.AppendLine("- Focus on reusing and adapting their existing code rather than writing new solutions");
-            promptBuilder.AppendLine("- If no exact match is found, suggest the closest similar implementations");
-            promptBuilder.AppendLine("- Format their code examples properly with syntax highlighting");
-            promptBuilder.AppendLine("- CRITICAL: Only include file paths that are provided in the context above. If no file path is available, omit it entirely.");
-            promptBuilder.AppendLine("- If no relevant code exists, acknowledge that and suggest they might need to implement something new");
             promptBuilder.AppendLine();
 
-            promptBuilder.AppendLine("Modernization and Updates:");
-            promptBuilder.AppendLine("- Analyze the found implementations for potential outdated patterns or libraries");
-            promptBuilder.AppendLine("- Identify deprecated APIs, old versions, or legacy approaches in their code");
-            promptBuilder.AppendLine("- Suggest specific modern alternatives with current best practices");
-            promptBuilder.AppendLine("- Provide updated code examples that maintain the same functionality");
-            promptBuilder.AppendLine("- Explain WHY the modern approach is better (performance, security, maintainability)");
-            promptBuilder.AppendLine("- Mention current library versions and when major updates occurred");
-            promptBuilder.AppendLine("- If the solution is still current and valid, explicitly state that");
-            promptBuilder.AppendLine("- ONLY include file paths that are explicitly provided in the context above. Never invent or generate placeholder file paths.");
-
-            promptBuilder.AppendLine();
-            promptBuilder.AppendLine("Remember: Your goal is to save the user time by helping them rediscover, reuse, and modernize their own excellent work!");
+            promptBuilder.AppendLine("Response Rules:");
+            promptBuilder.AppendLine("- Reference only real file paths from the context; never invent or assume any.");
+            promptBuilder.AppendLine("- Format code clearly with syntax highlighting and short explanations.");
+            promptBuilder.AppendLine("- Do not offer further help, follow-up, or invitations to continue the conversation.");
+            promptBuilder.AppendLine("- End the response immediately after providing the full answer.");
 
             return promptBuilder.ToString();
         }

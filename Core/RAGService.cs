@@ -45,68 +45,70 @@ namespace TotalRecall.Core
         {
             var indexedDocuments = new List<Document>();
             var errors = new List<string>();
-            var processedCount = 0;
+            const int batchSize = 500;
+            const int maxConcurrentTasks = 10;
 
-            foreach (var filePath in filePaths)
+            for (int i = 0; i < filePaths.Count; i += batchSize)
             {
-                try
-                {
-                    Console.WriteLine($"Processing file {processedCount + 1}/{filePaths.Count}: {filePath}");
+                var batchPaths = filePaths.Skip(i).Take(batchSize).ToList();
+                Console.WriteLine($"Processing batch {i / batchSize + 1} ({batchPaths.Count} files)...");
 
-                    string content;
+                var semaphore = new SemaphoreSlim(maxConcurrentTasks);
+                var batchTasks = new List<Task<Document?>>();
+
+                foreach (var filePath in batchPaths)
+                {
+                    await semaphore.WaitAsync();
+
+                    batchTasks.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var content = await File.ReadAllTextAsync(filePath);
+                            var doc = new Document
+                            {
+                                Id = SanitizeFileName(filePath),
+                                Path = filePath,
+                                Content = content
+                            };
+
+                            doc.ContentVector = await _aiService.GenerateDocumentEmbeddingAsync(doc);
+                            return doc;
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"Failed to process {filePath}: {ex.Message}");
+                            return null;
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }));
+                }
+
+                var completed = await Task.WhenAll(batchTasks);
+                var batchDocuments = completed.Where(d => d != null).ToList()!;
+
+                if (batchDocuments.Any())
+                {
+                    Console.WriteLine($"Indexing batch {i / batchSize + 1} with {batchDocuments.Count} documents...");
                     try
                     {
-                        content = await File.ReadAllTextAsync(filePath);
+                        await _searchService.IndexDocumentsAsync(batchDocuments!);
+                        indexedDocuments.AddRange(batchDocuments!);
+                        Console.WriteLine($"Successfully indexed batch {i / batchSize + 1}");
                     }
                     catch (Exception ex)
                     {
-                        errors.Add($"Failed to read {filePath}: {ex.Message}");
-                        continue;
+                        errors.Add($"Failed to index batch {i / batchSize + 1}: {ex.Message}");
                     }
-
-                    var document = new Document
-                    {
-                        Id = SanitizeFileName(filePath),
-                        Path = filePath,
-                        Content = content
-                    };
-
-                    // Generate embedding for the document
-                    document.ContentVector = await _aiService.GenerateDocumentEmbeddingAsync(document);
-                    indexedDocuments.Add(document);
-
-                    processedCount++;
-
-                    if (processedCount % 10 == 0)
-                    {
-                        Console.WriteLine($"Processed {processedCount} files...");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to process {filePath}: {ex.Message}");
-                    Console.WriteLine($"Error processing {filePath}: {ex.Message}");
-                }
-            }
-
-            // Batch index all documents
-            if (indexedDocuments.Any())
-            {
-                Console.WriteLine($"Indexing {indexedDocuments.Count} documents...");
-                try
-                {
-                    await _searchService.IndexDocumentsAsync(indexedDocuments);
-                    Console.WriteLine($"Successfully indexed {indexedDocuments.Count} documents");
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to index documents: {ex.Message}");
-                    Console.WriteLine($"Error indexing documents: {ex.Message}");
                 }
             }
 
             return (indexedDocuments, errors);
         }
+
 
         public async Task<(bool success, string message)> EnsureIndexExistsAsync()
         {

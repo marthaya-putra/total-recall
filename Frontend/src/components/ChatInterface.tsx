@@ -61,12 +61,16 @@ export function ChatInterface() {
     setInput('')
   }
 
+  const handleReset = () => {
+    setMessages([])
+  }
+
   return (
-    <div className="flex flex-col h-full bg-gray-50  mt-4">
+    <div className="flex flex-col h-full bg-gray-50 mt-4">
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {messages.length === 0 && !isPending && (
-          <div className="text-center text-gray-500 mt-8">
-            <p className="text-lg mb-2">What would you like to recall today?</p>
+          <div className="text-center text-gray-500 min-h-48 grid content-center">
+            <p className="text-lg">What would you like to recall today?</p>
           </div>
         )}
 
@@ -100,7 +104,6 @@ export function ChatInterface() {
               <div className="prose prose-sm">
                 <MarkdownRenderer content={streamData} />
               </div>
-              <div className="text-xs text-gray-500 mt-2">Typing...</div>
             </div>
           </div>
         )}
@@ -128,10 +131,17 @@ export function ChatInterface() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about your documents..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={isPending}
           />
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={messages.length === 0 || isPending}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            Reset
+          </button>
           <button
             type="submit"
             disabled={!input.trim() || isPending}
