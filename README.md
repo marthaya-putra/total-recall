@@ -164,18 +164,6 @@ npm run build
 
 The build output will be in the `dist/` directory.
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
-
-## 📄 License
-
-[Add your license information here]
-
 ## 🔗 Related Resources
 
 - [Azure AI Search Documentation](https://learn.microsoft.com/azure/search/)
