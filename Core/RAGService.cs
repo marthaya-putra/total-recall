@@ -10,6 +10,7 @@ namespace TotalRecall.Core
         private readonly AzureAIService _aiService;
         private readonly SearchIndexService _searchService;
         private readonly ConfigurationService _configService;
+        private readonly TextChunkerService _chunkerService;
 
         public RAGService(
             ConfigurationService configService,
@@ -19,6 +20,7 @@ namespace TotalRecall.Core
             _configService = configService;
             _searchService = searchService;
             _aiService = aiService;
+            _chunkerService = new TextChunkerService();
         }
 
         public async Task<List<(string path, string content)>> SearchContextsAsync(string query, int topK = 3)
@@ -46,58 +48,85 @@ namespace TotalRecall.Core
         {
             var indexedDocuments = new List<Document>();
             var errors = new List<string>();
-            const int batchSize = 500;
-            const int maxConcurrentTasks = 10;
+            const int batchSize = 100; // Reduced batch size to handle chunks
 
             for (int i = 0; i < filePaths.Count; i += batchSize)
             {
                 var batchPaths = filePaths.Skip(i).Take(batchSize).ToList();
                 Console.WriteLine($"Processing batch {i / batchSize + 1} ({batchPaths.Count} files)...");
 
-                var semaphore = new SemaphoreSlim(maxConcurrentTasks);
-                var batchTasks = new List<Task<Document?>>();
+                var allDocumentChunks = new List<Document>();
 
                 foreach (var filePath in batchPaths)
                 {
-                    await semaphore.WaitAsync();
-
-                    batchTasks.Add(Task.Run(async () =>
+                    try
                     {
-                        try
+                        var content = await File.ReadAllTextAsync(filePath);
+                        var documentId = Guid.NewGuid().ToString();
+                        var chunks = _chunkerService.ChunkText(content);
+                        var documentChunks = new List<Document>();
+
+                        if (chunks.Count == 1)
                         {
-                            var content = await File.ReadAllTextAsync(filePath);
+                            // No chunking needed, create single document
                             var doc = new Document
                             {
-                                Id = Guid.NewGuid().ToString(),
+                                Id = documentId,
                                 Path = filePath,
-                                Content = content
+                                Content = chunks[0]
                             };
 
                             doc.ContentVector = await _aiService.GenerateDocumentEmbeddingAsync(doc);
-                            return doc;
+                            allDocumentChunks.Add(doc);
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            errors.Add($"Failed to process {filePath}: {ex.Message}");
-                            return null;
+                            // Process chunks and merge their embeddings
+                            Console.WriteLine($"Document {filePath} requires {chunks.Count} chunks...");
+                            var chunkEmbeddings = new List<float[]>();
+
+                            for (int chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
+                            {
+                                var chunkDoc = new Document
+                                {
+                                    Id = $"{documentId}_chunk_{chunkIndex}",
+                                    Path = filePath,
+                                    Content = chunks[chunkIndex]
+                                };
+
+                                var chunkEmbedding = await _aiService.GenerateDocumentEmbeddingAsync(chunkDoc);
+                                chunkEmbeddings.Add(chunkEmbedding);
+                            }
+
+                            // Merge all chunk embeddings into a single vector
+                            var mergedEmbedding = MergeEmbeddings(chunkEmbeddings);
+
+                            var doc = new Document
+                            {
+                                Id = documentId,
+                                Path = filePath,
+                                Content = content, // Store original full content
+                                ContentVector = mergedEmbedding
+                            };
+
+                            allDocumentChunks.Add(doc);
                         }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }));
+
+                        Console.WriteLine($"Processed {allDocumentChunks.Count} documents for {filePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Failed to process {filePath}: {ex.Message}");
+                    }
                 }
 
-                var completed = await Task.WhenAll(batchTasks);
-                var batchDocuments = completed.Where(d => d != null).ToList()!;
-
-                if (batchDocuments.Any())
+                if (allDocumentChunks.Any())
                 {
-                    Console.WriteLine($"Indexing batch {i / batchSize + 1} with {batchDocuments.Count} documents...");
+                    Console.WriteLine($"Indexing batch {i / batchSize + 1} with {allDocumentChunks.Count} chunks...");
                     try
                     {
-                        await _searchService.IndexDocumentsAsync(batchDocuments!);
-                        indexedDocuments.AddRange(batchDocuments!);
+                        await _searchService.IndexDocumentsAsync(allDocumentChunks);
+                        indexedDocuments.AddRange(allDocumentChunks);
                         Console.WriteLine($"Successfully indexed batch {i / batchSize + 1}");
                     }
                     catch (Exception ex)
@@ -134,7 +163,7 @@ namespace TotalRecall.Core
             }
         }
 
-  
+
         public string GetIndexInfo()
         {
             var config = _configService.GetAllConfigs();
@@ -147,5 +176,35 @@ namespace TotalRecall.Core
                 CompletionModel = config["COMPLETION_DEPLOYMENT"]
             }, new JsonSerializerOptions { WriteIndented = true });
         }
+
+        /// <summary>
+        /// Merges multiple embeddings by averaging their values
+        /// </summary>
+        /// <param name="embeddings">List of embedding vectors to merge</param>
+        /// <returns>Averaged embedding vector</returns>
+        private static float[] MergeEmbeddings(List<float[]> embeddings)
+        {
+            if (embeddings == null || embeddings.Count == 0)
+                return [];
+
+            var vectorSize = embeddings[0].Length;
+            var merged = new float[vectorSize];
+
+            foreach (var embedding in embeddings)
+            {
+                if (embedding.Length != vectorSize)
+                    throw new ArgumentException("Embedding dimensions must match.");
+
+                for (int i = 0; i < vectorSize; i++)
+                    merged[i] += embedding[i];
+            }
+
+            var count = embeddings.Count;
+            for (int i = 0; i < vectorSize; i++)
+                merged[i] /= count;
+
+            return merged;
+        }
+
     }
 }
