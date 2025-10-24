@@ -3,6 +3,7 @@ using Azure;
 using Azure.AI.OpenAI;
 using OpenAI;
 using OpenAI.Chat;
+using Sprache;
 using TotalRecall.Core;
 
 namespace TotalRecall.Core

@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using Azure;
 using Azure.Search.Documents;
@@ -67,7 +68,7 @@ namespace TotalRecall.Core
                             var content = await File.ReadAllTextAsync(filePath);
                             var doc = new Document
                             {
-                                Id = SanitizeFileName(filePath),
+                                Id = Guid.NewGuid().ToString(),
                                 Path = filePath,
                                 Content = content
                             };
@@ -133,32 +134,7 @@ namespace TotalRecall.Core
             }
         }
 
-        /// <summary>
-        /// Sanitizes a file path by replacing special characters with underscores.
-        /// Only allows letters, digits, underscores, and dashes.
-        /// Ensures the result doesn't start with an underscore.
-        /// </summary>
-        /// <param name="filePath">The original file path</param>
-        /// <returns>Sanitized file path with only allowed characters</returns>
-        private static string SanitizeFileName(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath))
-                return filePath;
-
-            // Replace any character that's not a letter, digit, underscore, or dash with underscore
-            // This includes directory separators which will be replaced with underscores
-            string sanitized = System.Text.RegularExpressions.Regex.Replace(filePath, @"[^a-zA-Z0-9_-]", "_");
-
-            // Remove leading underscores that were created from special characters
-            sanitized = sanitized.TrimStart('_');
-
-            // If the result is empty (all characters were invalid), use a default name
-            if (string.IsNullOrEmpty(sanitized))
-                return "file";
-
-            return sanitized;
-        }
-
+  
         public string GetIndexInfo()
         {
             var config = _configService.GetAllConfigs();
