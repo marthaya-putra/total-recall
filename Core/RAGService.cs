@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Text.Json;
 using Azure;
 using Azure.Search.Documents;
@@ -177,31 +178,64 @@ namespace TotalRecall.Core
             }, new JsonSerializerOptions { WriteIndented = true });
         }
 
-        /// <summary>
-        /// Merges multiple embeddings by averaging their values
-        /// </summary>
-        /// <param name="embeddings">List of embedding vectors to merge</param>
-        /// <returns>Averaged embedding vector</returns>
-        private static float[] MergeEmbeddings(List<float[]> embeddings)
+        public static float[] MergeEmbeddings(List<float[]> embeddings)
         {
             if (embeddings == null || embeddings.Count == 0)
                 return [];
 
-            var vectorSize = embeddings[0].Length;
+            int vectorSize = embeddings[0].Length;
             var merged = new float[vectorSize];
 
+            // Verify all embeddings have the same dimension
             foreach (var embedding in embeddings)
             {
                 if (embedding.Length != vectorSize)
                     throw new ArgumentException("Embedding dimensions must match.");
-
-                for (int i = 0; i < vectorSize; i++)
-                    merged[i] += embedding[i];
             }
 
-            var count = embeddings.Count;
-            for (int i = 0; i < vectorSize; i++)
-                merged[i] /= count;
+            int simdLength = Vector<float>.Count; // Usually 4, 8, or 16 depending on CPU
+            int i = 0;
+
+            // --- Vectorized summation ---
+            for (; i <= vectorSize - simdLength; i += simdLength)
+            {
+                var sumVec = Vector<float>.Zero;
+
+                // Sum across all embeddings for this vector segment
+                foreach (var embedding in embeddings)
+                {
+                    var vec = new Vector<float>(embedding, i);
+                    sumVec += vec;
+                }
+
+                // Store result back into merged array
+                sumVec.CopyTo(merged, i);
+            }
+
+            // --- Handle remaining elements (tail) ---
+            for (; i < vectorSize; i++)
+            {
+                float sum = 0f;
+                foreach (var embedding in embeddings)
+                    sum += embedding[i];
+
+                merged[i] = sum;
+            }
+
+            // --- Average the summed vector ---
+            float divisor = embeddings.Count;
+            var divisorVec = new Vector<float>(divisor);
+
+            i = 0;
+            for (; i <= vectorSize - simdLength; i += simdLength)
+            {
+                var vec = new Vector<float>(merged, i);
+                vec /= divisorVec;
+                vec.CopyTo(merged, i);
+            }
+
+            for (; i < vectorSize; i++)
+                merged[i] /= divisor;
 
             return merged;
         }
