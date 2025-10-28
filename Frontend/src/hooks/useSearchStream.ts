@@ -1,7 +1,11 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 
-const fetchStream = async (query: string, onChunk: (chunk: string) => void) => {
+const fetchStream = async (
+  query: string,
+  onChunk: (chunk: string) => void,
+  onDone?: () => void,
+) => {
   const response = await fetch('http://localhost:5291/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -20,7 +24,10 @@ const fetchStream = async (query: string, onChunk: (chunk: string) => void) => {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      onDone?.()
+      break
+    }
 
     const chunk = decoder.decode(value, { stream: true })
     onChunk(chunk)
@@ -30,32 +37,38 @@ const fetchStream = async (query: string, onChunk: (chunk: string) => void) => {
 }
 
 interface UseSearchStreamOptions {
-  onComplete?: (content: string) => void
+  onComplete?: () => void
   onError?: (error: Error) => void
 }
 
+interface Message {
+  id: string
+  content: string
+  role: 'user' | 'assistant'
+  timestamp: Date
+}
+
 export function useSearchStream(options: UseSearchStreamOptions = {}) {
-  const [streamData, setStreamData] = useState('')
+  const [messages, setMessages] = useState<Array<Message>>([])
 
   const searchMutation = useMutation({
     mutationFn: async (query: string) => {
-      setStreamData('') // reset for new search
-      let accumulatedContent = ''
-
       try {
-        await fetchStream(query, (chunk) => {
-          accumulatedContent += chunk
-          setStreamData(accumulatedContent)
-        })
-
-        // Call completion callback when stream ends
-        if (options.onComplete) {
-          options.onComplete(accumulatedContent)
-        }
-
-        return 'done'
+        await fetchStream(
+          query,
+          (chunk) => {
+            const lastAssistantMessage = messages.at(-1)
+            lastAssistantMessage!.content += chunk
+            setMessages((prev) => {
+              return [
+                ...prev.filter((p) => p.id !== lastAssistantMessage!.id),
+                lastAssistantMessage!,
+              ]
+            })
+          },
+          options.onComplete,
+        )
       } catch (error) {
-        // Call error callback if provided
         if (options.onError) {
           options.onError(error as Error)
         }
@@ -64,5 +77,30 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
     },
   })
 
-  return { ...searchMutation, streamData }
+  const sendMessage = (message: string) => {
+    const newMessage: Message = {
+      id: crypto.randomUUID(),
+      content: message,
+      role: 'user',
+      timestamp: new Date(),
+    }
+
+    const newAssistantMessage = {
+      id: crypto.randomUUID(),
+      content: '',
+      role: 'assistant',
+      timestamp: new Date(),
+    } satisfies Message
+
+    setMessages((prev) => [...prev, newMessage, newAssistantMessage])
+
+    searchMutation.mutate(message)
+  }
+
+  return {
+    isPending: searchMutation.isPending,
+    messages,
+    sendMessage,
+    reset: () => setMessages([]),
+  }
 }

@@ -2,40 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchStream } from '../hooks/useSearchStream'
 import MarkdownRenderer from './MarkdownRenderer'
 
-interface Message {
-  id: string
-  content: string
-  role: 'user' | 'assistant'
-  timestamp: Date
-}
-
 export function ChatInterface() {
-  const [messages, setMessages] = useState<Array<Message>>([])
   const [input, setInput] = useState('')
+  const [error, setError] = useState('')
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { mutate, streamData, isPending } = useSearchStream({
-    onComplete: (content: string) => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content,
-        role: 'assistant',
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-    },
-    onError: (error: Error) => {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: `Error: ${error.message}`,
-        role: 'assistant',
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
+  const {
+    sendMessage,
+    messages: messages,
+    reset,
+    isPending,
+  } = useSearchStream({
+    onError: (streamError: Error) => {
+      setError(streamError.message)
     },
   })
-
-  console.log('Stream Data: ', streamData)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -43,26 +25,18 @@ export function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, streamData])
+  }, [messages, messages])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isPending) return
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: input.trim(),
-      role: 'user',
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    mutate(input.trim())
+    sendMessage(input)
     setInput('')
   }
 
   const handleReset = () => {
-    setMessages([])
+    reset()
   }
 
   return (
@@ -76,39 +50,33 @@ export function ChatInterface() {
 
         {messages.map((message) => (
           <div key={message.id} className="flex justify-stretch">
-            <div
-              className={`px-4 py-3 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-blue-600 text-white max-w-5xl'
-                  : 'bg-white border border-gray-200 text-gray-900'
-              }`}
-            >
-              <div className="prose prose-sm max-w-none">
-                {message.role === 'user' ? (
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                ) : (
-                  <MarkdownRenderer content={message.content} />
-                )}
+            {message.content && (
+              <div
+                className={`px-4 py-3 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-blue-600 text-white max-w-5xl'
+                    : 'bg-white border border-gray-200 text-gray-900'
+                }`}
+              >
+                <div className="max-w-none">
+                  {message.role === 'user' ? (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  ) : (
+                    <div className="prose prose-sm">
+                      <MarkdownRenderer content={message.content} />
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs opacity-70 mt-2">
+                  {message.timestamp.toLocaleTimeString()}
+                </div>
               </div>
-              <div className="text-xs opacity-70 mt-2">
-                {message.timestamp.toLocaleTimeString()}
-              </div>
-            </div>
+            )}
           </div>
         ))}
 
-        {/* Streaming message */}
-        {isPending && streamData && (
-          <div className="flex">
-            <div className="px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900">
-              <div className="prose prose-sm">
-                <MarkdownRenderer content={streamData} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isPending && !streamData && (
+        {isPending && (
           <div className="flex">
             <div className="px-4 py-3 rounded-lg bg-white border border-gray-200">
               <div className="flex items-center space-x-2">
@@ -151,6 +119,7 @@ export function ChatInterface() {
           </button>
         </form>
       </div>
+      <span className="text-red-500">{error}</span>
     </div>
   )
 }

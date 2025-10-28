@@ -1,19 +1,18 @@
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
 import '@fontsource/fira-code'
+import 'highlight.js/styles/github-dark.css'
 
 interface MarkdownRendererProps {
   content: string
 }
 
 export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
-  // ensure highlighting runs on re-render (for streaming updates)
-  useEffect(() => {
+  useLayoutEffect(() => {
     hljs.highlightAll()
-  }, [content])
+  })
 
   return (
     <div className="prose prose-slate max-w-none dark:prose-invert">
@@ -40,7 +39,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
             code = code.replace(/\n$/, '')
 
             if (!inline && language) {
-              return <CodeBlock language={language} code={code} />
+              return <CodeBlock language={'javascript'} code={code} />
             }
 
             return (
@@ -57,32 +56,36 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
   )
 }
 
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  const [copied, setCopied] = useState(false)
+const CodeBlock = forwardRef<HTMLElement, { language: string; code: string }>(
+  ({ language, code }, ref) => {
+    const [copied, setCopied] = useState(false)
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    const handleCopy = async () => {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
 
-  return (
-    <div className="relative group my-4">
-      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition">
-        <button
-          onClick={handleCopy}
-          className={`text-xs px-2 py-1 rounded transition-colors cursor-pointer ${
-            copied
-              ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-100 hover:bg-gray-600'
-          }`}
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
+    return (
+      <div className="relative group my-4">
+        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition">
+          <button
+            onClick={handleCopy}
+            className={`text-xs px-2 py-1 rounded transition-colors cursor-pointer ${
+              copied
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-700 text-gray-100 hover:bg-gray-600'
+            }`}
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+        <pre className="bg-[#0d1117] rounded-xl p-4 overflow-x-auto font-mono text-sm leading-6">
+          <code ref={ref} className={`language-${language}`}>
+            {code}
+          </code>
+        </pre>
       </div>
-      <pre className="bg-[#0d1117] rounded-xl p-4 overflow-x-auto font-mono text-sm leading-6">
-        <code className={`language-${language}`}>{code}</code>
-      </pre>
-    </div>
-  )
-}
+    )
+  },
+)
